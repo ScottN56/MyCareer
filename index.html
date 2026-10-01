@@ -23,12 +23,14 @@
     * { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body { margin: 0; background: var(--ink); color: var(--paper); font-family: var(--sans); font-size: 16px; line-height: 1.55; }
+    .ambient-weld { position: fixed; z-index: 0; inset: 0; width: 100%; height: 100%; opacity: .62; pointer-events: none; }
     a { color: inherit; }
     button, a { -webkit-tap-highlight-color: transparent; }
     button:focus-visible, a:focus-visible { outline: 2px solid var(--mint); outline-offset: 4px; }
     .wrap { width: min(1180px, calc(100% - 64px)); margin-inline: auto; }
     .eyebrow { color: var(--orange); font: 700 11px/1.4 var(--mono); text-transform: uppercase; letter-spacing: .08em; }
-    .topbar { height: 78px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+    .topbar { position: relative; z-index: 2; height: 78px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+    main, .footer { position: relative; z-index: 1; }
     .brand { display: inline-flex; align-items: center; gap: 11px; text-decoration: none; font: 700 12px/1 var(--mono); text-transform: uppercase; letter-spacing: .06em; }
     .brand-mark { display: grid; place-items: center; width: 31px; height: 31px; background: var(--orange); color: #fffaf1; font: 700 16px/1 var(--serif); transform: rotate(-4deg); }
     .nav { display: flex; align-items: center; gap: 31px; }
@@ -164,6 +166,7 @@
   </style>
 </head>
 <body>
+  <canvas class="ambient-weld" id="ambientWeld" aria-hidden="true"></canvas>
   <header class="wrap topbar">
     <a class="brand" href="#top" aria-label="Shop Floor to Software, home"><span class="brand-mark">S</span><span>Shop Floor<br>to Software</span></a>
     <button class="menu-toggle" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="site-nav">&#9776;</button>
@@ -349,6 +352,111 @@
     const weldContext = weldCanvas.getContext('2d');
     const motionButton = document.querySelector('#motionToggle');
     const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const ambientCanvas = document.querySelector('#ambientWeld');
+    const ambientContext = ambientCanvas.getContext('2d');
+
+    if (ambientContext) {
+      const ambientSize = { width: 0, height: 0, ratio: 1 };
+      const ambientSparks = [];
+      let ambientFrame = 0;
+      let ambientLastTime = 0;
+      let ambientRunning = false;
+
+      function createAmbientSpark(fromBottom = false) {
+        const edgeWidth = Math.min(140, ambientSize.width * 0.12);
+        const onRight = Math.random() > 0.5;
+        const left = onRight ? ambientSize.width - edgeWidth : 0;
+        const life = 2.5 + Math.random() * 3.5;
+        return {
+          x: left + Math.random() * edgeWidth,
+          y: fromBottom ? ambientSize.height + Math.random() * 80 : Math.random() * ambientSize.height,
+          vx: (Math.random() - 0.5) * 12,
+          vy: -14 - Math.random() * 36,
+          life,
+          maxLife: life,
+          tail: 5 + Math.random() * 13,
+          width: 0.7 + Math.random() * 1.1,
+          hot: Math.random() > 0.72
+        };
+      }
+
+      function drawAmbientSparks(delta = 0, advance = false) {
+        const { width, height } = ambientSize;
+        if (!width || !height) return;
+
+        ambientContext.clearRect(0, 0, width, height);
+        ambientContext.lineCap = 'round';
+        for (let index = ambientSparks.length - 1; index >= 0; index -= 1) {
+          const spark = ambientSparks[index];
+          const fadeIn = Math.min(1, (spark.maxLife - spark.life) * 3 + 0.15);
+          const fadeOut = Math.min(1, spark.life * 0.75);
+          const opacity = fadeIn * fadeOut * (spark.hot ? 0.52 : 0.31);
+          ambientContext.beginPath();
+          ambientContext.moveTo(spark.x, spark.y);
+          ambientContext.lineTo(spark.x - spark.vx * 0.045, spark.y + spark.tail);
+          ambientContext.strokeStyle = spark.hot
+            ? `rgba(255, 203, 129, ${opacity})`
+            : `rgba(255, 119, 59, ${opacity})`;
+          ambientContext.lineWidth = spark.width;
+          ambientContext.shadowColor = spark.hot ? '#ffc47a' : '#ff6b32';
+          ambientContext.shadowBlur = spark.hot ? 8 : 4;
+          ambientContext.stroke();
+          ambientContext.shadowBlur = 0;
+
+          if (advance) {
+            spark.x += spark.vx * delta;
+            spark.y += spark.vy * delta;
+            spark.life -= delta;
+            if (spark.life <= 0 || spark.y < -20) ambientSparks[index] = createAmbientSpark(true);
+          }
+        }
+      }
+
+      function resizeAmbientCanvas() {
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        ambientSize.width = window.innerWidth;
+        ambientSize.height = window.innerHeight;
+        ambientSize.ratio = ratio;
+        ambientCanvas.width = Math.round(ambientSize.width * ratio);
+        ambientCanvas.height = Math.round(ambientSize.height * ratio);
+        ambientContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ambientSparks.length = 0;
+        const sparkCount = Math.max(7, Math.min(22, Math.round(ambientSize.width / 72)));
+        for (let index = 0; index < sparkCount; index += 1) {
+          ambientSparks.push(createAmbientSpark());
+        }
+        drawAmbientSparks();
+      }
+
+      function animateAmbient(timestamp) {
+        ambientFrame = 0;
+        if (!ambientRunning) return;
+        const delta = ambientLastTime ? Math.min((timestamp - ambientLastTime) / 1000, 0.05) : 0;
+        ambientLastTime = timestamp;
+        drawAmbientSparks(delta, true);
+        ambientFrame = requestAnimationFrame(animateAmbient);
+      }
+
+      function syncAmbientMotion() {
+        const shouldAnimate = !motionPreference.matches && !document.hidden;
+        if (shouldAnimate && !ambientRunning) {
+          ambientRunning = true;
+          ambientLastTime = 0;
+          ambientFrame = requestAnimationFrame(animateAmbient);
+        } else if (!shouldAnimate && ambientRunning) {
+          ambientRunning = false;
+          cancelAnimationFrame(ambientFrame);
+          ambientFrame = 0;
+          drawAmbientSparks();
+        }
+      }
+
+      window.addEventListener('resize', resizeAmbientCanvas);
+      document.addEventListener('visibilitychange', syncAmbientMotion);
+      motionPreference.addEventListener('change', syncAmbientMotion);
+      resizeAmbientCanvas();
+      syncAmbientMotion();
+    }
 
     if (weldContext) {
       const weldSize = { width: 0, height: 0, ratio: 1 };
