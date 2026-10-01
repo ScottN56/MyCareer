@@ -1,6 +1,6 @@
 # Shop Floor to Software
 
-A self-contained portfolio for Scott Natoli, a welder/fabricator moving into technology and coding. It uses plain HTML, CSS, and JavaScript; there are no packages to install or build step. Resume-based experience, skills, education, certification, work authorization, and contact details are in `index.html`. Illustrative welding photos are stored locally in `assets/`. An interactive canvas welding study animates sparks and supports pointer and keyboard torch controls, with a pause button and reduced-motion support. A subtle ambient ember layer sits behind the page content and pauses for reduced motion and hidden tabs.
+A self-contained portfolio for Scott Natoli, a welder/fabricator moving into technology and coding. It uses plain HTML, CSS, and JavaScript; there are no packages to install or build step. Resume-based experience, skills, education, certification, work authorization, and contact details are in `index.html`. Illustrative welding photos are stored locally in `assets/`. An interactive canvas welding study animates sparks and supports pointer and keyboard torch controls, with a pause button and reduced-motion support. An edge-lit ambient ember layer sits behind the page content and pauses for reduced motion and hidden tabs.
 
 ## Preview
 
