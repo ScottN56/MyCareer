@@ -59,6 +59,15 @@
     .equipment-type { color: var(--orange); font: 10px var(--mono); text-transform: uppercase; text-align: right; }
     .equipment-credit { grid-column: 1 / -1; color: var(--muted); font: 10px var(--mono); }
     .equipment-credit a { text-decoration-color: var(--mint); text-underline-offset: 3px; }
+    .weld-study { margin: 48px 0 0; border: 1px solid var(--line); background: #202824; }
+    .weld-canvas { display: block; width: 100%; height: clamp(290px, 42vw, 450px); background: #202824; cursor: crosshair; touch-action: pan-y; }
+    .weld-canvas:focus-visible { outline: 3px solid var(--orange); outline-offset: -5px; }
+    .weld-toolbar { min-height: 57px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #e9e7df; border-top: 1px solid rgba(244,242,235,.18); }
+    .weld-meta { color: #c3c9c0; font: 10px var(--mono); text-transform: uppercase; }
+    .motion-toggle { min-height: 36px; padding: 0 11px; display: inline-flex; align-items: center; gap: 9px; border: 1px solid rgba(244,242,235,.35); background: transparent; color: #fffaf1; font: 10px var(--mono); text-transform: uppercase; cursor: pointer; }
+    .motion-toggle:hover { background: rgba(244,242,235,.12); }
+    .motion-toggle:focus-visible { outline-color: #f6a17d; }
+    .motion-glyph { min-width: 12px; color: #f18a56; font-size: 14px; }
 
     .ticker { border-block: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); }
     .ticker-item { padding: 19px 22px; display: flex; align-items: center; justify-content: center; gap: 12px; color: #434c44; font: 11px var(--mono); text-transform: uppercase; }
@@ -127,6 +136,8 @@
       .equipment-section { padding-block: 65px 72px; }
       .equipment-grid { grid-template-columns: 1fr; gap: 14px; }
       .equipment-card img { aspect-ratio: 16 / 10; }
+      .weld-study { margin-top: 34px; }
+      .weld-canvas { height: 300px; }
       .ticker-item { padding: 15px 8px; gap: 7px; flex-direction: column; text-align: center; font-size: 9px; }
       section.content-section { padding-block: 76px; }
       .section-head { grid-template-columns: 1fr; gap: 12px; margin-bottom: 32px; }
@@ -204,6 +215,17 @@
           <figcaption><span class="equipment-name">Torch &amp; workbench</span><span class="equipment-type">TIG / 02</span><span class="equipment-credit">Photo: <a href="https://unsplash.com/@jimmynilssonmasth" target="_blank" rel="noreferrer">Jimmy Nilsson Masth</a></span></figcaption>
         </figure>
       </div>
+      <div class="section-head reveal" style="margin-top: 66px;">
+        <div class="section-index">02 / The weld pass</div>
+        <div><h3 class="section-title">Heat in motion.</h3><p class="section-lede">An interactive study in torch travel, bead, and sparks.</p></div>
+      </div>
+      <figure class="weld-study reveal">
+        <canvas class="weld-canvas" id="weldCanvas" role="slider" tabindex="0" aria-label="Welding torch position along a steel plate" aria-valuemin="10" aria-valuemax="90" aria-valuenow="58" aria-valuetext="Torch at 58 percent along the weld path" title="Move the torch with the pointer or arrow keys">Your browser does not support the animated welding illustration.</canvas>
+        <figcaption class="weld-toolbar">
+          <span class="weld-meta">Welding study / torch travel</span>
+          <button class="motion-toggle" id="motionToggle" type="button" aria-pressed="true" aria-label="Pause welding animation"><span class="motion-glyph" aria-hidden="true">||</span><span class="motion-label">Pause animation</span></button>
+        </figcaption>
+      </figure>
     </section>
 
     <section class="wrap content-section" id="story">
@@ -322,6 +344,256 @@
     });
 
     document.querySelector('#year').textContent = new Date().getFullYear();
+
+    const weldCanvas = document.querySelector('#weldCanvas');
+    const weldContext = weldCanvas.getContext('2d');
+    const motionButton = document.querySelector('#motionToggle');
+    const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    if (weldContext) {
+      const weldSize = { width: 0, height: 0, ratio: 1 };
+      const sparks = [];
+      let torchProgress = 0.58;
+      let animationPlaying = !motionPreference.matches;
+      let animationFrame = 0;
+      let previousFrameTime = 0;
+      let sparkTimer = 0;
+
+      function setTorchProgress(value) {
+        torchProgress = Math.max(0.1, Math.min(0.9, value));
+        const percentage = Math.round(torchProgress * 100);
+        weldCanvas.setAttribute('aria-valuenow', String(percentage));
+        weldCanvas.setAttribute('aria-valuetext', `Torch at ${percentage} percent along the weld path`);
+        if (!animationPlaying) drawWeldScene();
+      }
+
+      function resizeWeldCanvas() {
+        const bounds = weldCanvas.getBoundingClientRect();
+        weldSize.width = bounds.width;
+        weldSize.height = bounds.height;
+        weldSize.ratio = Math.min(window.devicePixelRatio || 1, 2);
+        weldCanvas.width = Math.round(bounds.width * weldSize.ratio);
+        weldCanvas.height = Math.round(bounds.height * weldSize.ratio);
+        weldContext.setTransform(weldSize.ratio, 0, 0, weldSize.ratio, 0, 0);
+        if (!animationPlaying) drawWeldScene();
+      }
+
+      function drawWeldScene() {
+        const width = weldSize.width;
+        const height = weldSize.height;
+        if (!width || !height) return;
+
+        const context = weldContext;
+        const background = context.createLinearGradient(0, 0, 0, height);
+        background.addColorStop(0, '#28332e');
+        background.addColorStop(1, '#171d1a');
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = background;
+        context.fillRect(0, 0, width, height);
+
+        context.save();
+        context.globalAlpha = 0.18;
+        context.strokeStyle = '#aab6aa';
+        context.lineWidth = 1;
+        for (let x = 0; x < width; x += 32) {
+          context.beginPath();
+          context.moveTo(x, 0);
+          context.lineTo(x, height);
+          context.stroke();
+        }
+        for (let y = 0; y < height; y += 32) {
+          context.beginPath();
+          context.moveTo(0, y);
+          context.lineTo(width, y);
+          context.stroke();
+        }
+        context.restore();
+
+        const plate = context.createLinearGradient(0, height * 0.2, width * 0.1, height * 0.94);
+        plate.addColorStop(0, '#77827a');
+        plate.addColorStop(0.48, '#535e56');
+        plate.addColorStop(1, '#39433d');
+        context.beginPath();
+        context.moveTo(width * 0.08, height * 0.28);
+        context.lineTo(width * 0.91, height * 0.18);
+        context.lineTo(width * 0.95, height * 0.82);
+        context.lineTo(width * 0.12, height * 0.92);
+        context.closePath();
+        context.fillStyle = plate;
+        context.fill();
+        context.strokeStyle = 'rgba(231, 232, 220, .45)';
+        context.lineWidth = 1;
+        context.stroke();
+
+        for (const bolt of [[0.15, 0.34], [0.84, 0.26], [0.18, 0.84], [0.88, 0.76]]) {
+          const boltX = width * bolt[0];
+          const boltY = height * bolt[1];
+          context.beginPath();
+          context.arc(boltX, boltY, 5, 0, Math.PI * 2);
+          context.fillStyle = '#303a34';
+          context.fill();
+          context.strokeStyle = 'rgba(223, 226, 213, .52)';
+          context.stroke();
+        }
+
+        const startX = width * 0.2;
+        const endX = width * 0.8;
+        const startY = height * 0.7;
+        const endY = height * 0.58;
+        const torchX = startX + (endX - startX) * torchProgress;
+        const torchY = startY + (endY - startY) * torchProgress;
+
+        context.beginPath();
+        context.moveTo(startX, startY);
+        context.lineTo(endX, endY);
+        context.strokeStyle = 'rgba(22, 29, 25, .9)';
+        context.lineWidth = 12;
+        context.lineCap = 'round';
+        context.stroke();
+
+        context.beginPath();
+        context.moveTo(startX, startY);
+        const beadSteps = Math.max(12, Math.round(torchProgress * 140));
+        for (let step = 1; step <= beadSteps; step += 1) {
+          const portion = (step / beadSteps) * torchProgress;
+          const beadX = startX + (endX - startX) * portion;
+          const beadY = startY + (endY - startY) * portion + Math.sin(step * 1.8) * 2.1;
+          context.lineTo(beadX, beadY);
+        }
+        context.strokeStyle = '#9aada0';
+        context.lineWidth = 7;
+        context.stroke();
+        context.strokeStyle = 'rgba(229, 235, 220, .7)';
+        context.lineWidth = 1.5;
+        context.stroke();
+
+        const arcGlow = context.createRadialGradient(torchX, torchY, 2, torchX, torchY, 49);
+        arcGlow.addColorStop(0, 'rgba(255, 244, 198, .95)');
+        arcGlow.addColorStop(0.16, 'rgba(255, 166, 76, .78)');
+        arcGlow.addColorStop(1, 'rgba(245, 96, 43, 0)');
+        context.fillStyle = arcGlow;
+        context.fillRect(torchX - 50, torchY - 50, 100, 100);
+
+        context.save();
+        context.lineCap = 'round';
+        context.shadowColor = 'rgba(244, 119, 59, .55)';
+        context.shadowBlur = 8;
+        context.beginPath();
+        context.moveTo(torchX - 82, torchY - 112);
+        context.lineTo(torchX - 9, torchY - 12);
+        context.strokeStyle = '#202824';
+        context.lineWidth = 25;
+        context.stroke();
+        context.shadowBlur = 0;
+        context.beginPath();
+        context.moveTo(torchX - 82, torchY - 112);
+        context.lineTo(torchX - 9, torchY - 12);
+        context.strokeStyle = '#aab2a9';
+        context.lineWidth = 17;
+        context.stroke();
+        context.beginPath();
+        context.moveTo(torchX - 14, torchY - 18);
+        context.lineTo(torchX + 2, torchY + 3);
+        context.strokeStyle = '#bd7049';
+        context.lineWidth = 9;
+        context.stroke();
+        context.restore();
+
+        for (const spark of sparks) {
+          const opacity = Math.max(0, spark.life / spark.maxLife);
+          context.beginPath();
+          context.moveTo(spark.x, spark.y);
+          context.lineTo(spark.x - spark.vx * 0.018, spark.y - spark.vy * 0.018);
+          context.strokeStyle = `rgba(255, ${Math.round(137 + opacity * 92)}, ${Math.round(67 + opacity * 90)}, ${opacity})`;
+          context.lineWidth = spark.width;
+          context.shadowColor = '#ff843f';
+          context.shadowBlur = 7;
+          context.stroke();
+          context.shadowBlur = 0;
+        }
+      }
+
+      function createSpark() {
+        const angle = -Math.PI + Math.random() * Math.PI;
+        const speed = 90 + Math.random() * 260;
+        sparks.push({
+          x: weldSize.width * (0.2 + 0.6 * torchProgress),
+          y: weldSize.height * (0.7 - 0.12 * torchProgress),
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          life: 0.24 + Math.random() * 0.42,
+          maxLife: 0.66,
+          width: 1 + Math.random() * 1.5
+        });
+      }
+
+      function animateWeld(timestamp) {
+        const delta = previousFrameTime ? Math.min((timestamp - previousFrameTime) / 1000, 0.05) : 0;
+        previousFrameTime = timestamp;
+        sparkTimer += delta;
+        while (sparkTimer > 0.035) {
+          createSpark();
+          if (Math.random() > 0.55) createSpark();
+          sparkTimer -= 0.035;
+        }
+        for (let index = sparks.length - 1; index >= 0; index -= 1) {
+          const spark = sparks[index];
+          spark.life -= delta;
+          spark.x += spark.vx * delta;
+          spark.y += spark.vy * delta;
+          spark.vy += 460 * delta;
+          if (spark.life <= 0) sparks.splice(index, 1);
+        }
+        drawWeldScene();
+        if (animationPlaying) animationFrame = requestAnimationFrame(animateWeld);
+      }
+
+      function setAnimationPlaying(shouldPlay) {
+        animationPlaying = shouldPlay;
+        motionButton.setAttribute('aria-pressed', String(animationPlaying));
+        motionButton.setAttribute('aria-label', animationPlaying ? 'Pause welding animation' : 'Play welding animation');
+        motionButton.querySelector('.motion-label').textContent = animationPlaying ? 'Pause animation' : 'Play animation';
+        motionButton.querySelector('.motion-glyph').textContent = animationPlaying ? '||' : '>';
+        if (animationPlaying && !animationFrame) {
+          previousFrameTime = 0;
+          animationFrame = requestAnimationFrame(animateWeld);
+        } else if (!animationPlaying) {
+          cancelAnimationFrame(animationFrame);
+          animationFrame = 0;
+          drawWeldScene();
+        }
+      }
+
+      function guideTorch(event) {
+        const bounds = weldCanvas.getBoundingClientRect();
+        const relativeX = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+        setTorchProgress(0.1 + relativeX * 0.8);
+      }
+
+      weldCanvas.addEventListener('pointermove', guideTorch);
+      weldCanvas.addEventListener('pointerdown', guideTorch);
+      weldCanvas.addEventListener('keydown', (event) => {
+        const adjustments = { ArrowLeft: -0.025, ArrowDown: -0.025, ArrowRight: 0.025, ArrowUp: 0.025 };
+        if (event.key === 'Home') {
+          event.preventDefault();
+          setTorchProgress(0.1);
+        } else if (event.key === 'End') {
+          event.preventDefault();
+          setTorchProgress(0.9);
+        } else if (Object.hasOwn(adjustments, event.key)) {
+          event.preventDefault();
+          setTorchProgress(torchProgress + adjustments[event.key]);
+        }
+      });
+
+      motionButton.addEventListener('click', () => setAnimationPlaying(!animationPlaying));
+      motionPreference.addEventListener('change', (event) => {
+        if (event.matches) setAnimationPlaying(false);
+      });
+      window.addEventListener('resize', resizeWeldCanvas);
+      resizeWeldCanvas();
+      setAnimationPlaying(animationPlaying);
+    }
 
     if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       const revealObserver = new IntersectionObserver((entries, observer) => {
